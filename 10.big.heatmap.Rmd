@@ -1,0 +1,523 @@
+---
+title: "Bins and contig abundance tables"
+author: "Alba Troci"
+date: "`r Sys.Date()`"  
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true 
+      highlight: tango
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F, echo=FALSE}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+
+
+# Pretty outputs
+library("rmarkdown")
+#library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library("ggpubr")
+
+# Set seed for reproducibility
+set.seed(100)
+
+# Set plotting theme
+theme_set(theme_few(base_size = 14))
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+```{r libraries, message=FALSE}
+library("magrittr")
+library("ggplot2")
+library("tidyverse")
+library("readxl")
+#library("dada2")
+library("phyloseq")
+library("gridExtra")
+library("vegan")
+library("plyr")
+library("scales")
+library("reshape2")
+library("DESeq2")
+#library("dplyr") #for data manipulation
+#library("msa") #multiple sequence alignment
+library("ape") #to create phylogenetic tree
+library("randomForest") 
+library("caret") 
+library("broom")
+library("mlbench")
+library("plotROC")
+library("car")
+library("MASS")
+library("lme4")
+library("lmerTest")
+library("fitdistrplus")
+library("psycho")
+library("rstatix")
+library("coin")
+library("stringr")
+library("data.table")
+
+
+
+```
+
+```{r}
+
+# Bibliotheken laden
+library(dplyr)
+library(readr)
+
+file1 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Alkohol/all_results.tsv"
+data.Alco <- as.data.frame(read_tsv(file1))
+data.Alco$Nutrient <- "Alcohol"
+
+file2 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Bier/all_results.tsv"
+data.Beer <- as.data.frame(read_tsv(file2))
+data.Beer$Nutrient <- "Beer"
+
+file3 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Bohnen/all_results.tsv"
+data.Bean <- as.data.frame(read_tsv(file3))
+data.Bean$Nutrient <- "Beans"
+
+file4 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Fleisch/all_results.tsv"
+data.Meat <- as.data.frame(read_tsv(file4))
+data.Meat$Nutrient <- "Meat"
+
+file5 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Gemüse/all_results.tsv"
+data.Veg <- as.data.frame(read_tsv(file5))
+data.Veg$Nutrient <- "Vegetable"
+
+file6 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Getreideprodukte/all_results.tsv"
+data.Grai <- as.data.frame(read_tsv(file6))
+data.Grai$Nutrient <- "Grain_Products"
+
+file7 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Kaffee/all_results.tsv"
+data.Coff <- as.data.frame(read_tsv(file7))
+data.Coff$Nutrient <- "Coffee"
+
+file8 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Milchprodukte/all_results.tsv"
+data.Diar <- as.data.frame(read_tsv(file8))
+data.Diar$Nutrient <- "Diary_Products"
+
+file9 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Süßigkeiten/all_results.tsv"
+data.Swee <- as.data.frame(read_tsv(file9))
+data.Swee$Nutrient <- "Sweets"
+
+
+
+# Kombiniere alle Daten in einen DataFrame
+results_food <- bind_rows(data.Alco, data.Beer, data.Bean, data.Meat, data.Veg, 
+                              data.Grai, data.Coff, data.Diar, data.Swee)
+
+```
+
+# signifikante ergebnisse einlesen 
+```{r}
+file14 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Alkohol/significant_results.tsv"
+sig.Alco <- as.data.frame(read_tsv(file14))
+sig.Alco$Nutrient <- "Alcohol"
+sig.Alco1 <- sig.Alco[!(sig.Alco$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file15 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Bier/significant_results.tsv"
+sig.Beer <- as.data.frame(read_tsv(file15))
+sig.Beer$Nutrient <- "Beer"
+sig.Beer1 <- sig.Beer[!(sig.Beer$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file16 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Bohnen/significant_results.tsv"
+sig.Bean <- as.data.frame(read_tsv(file16))
+sig.Bean$Nutrient <- "Beans"
+sig.Bean1 <- sig.Bean[!(sig.Bean$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file17 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Fleisch/significant_results.tsv"
+sig.Meat <- as.data.frame(read_tsv(file17))
+sig.Meat$Nutrient <- "Meat"
+sig.Meat1 <- sig.Meat[!(sig.Meat$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file18 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Gemüse/significant_results.tsv"
+sig.Veg <- as.data.frame(read_tsv(file18))
+sig.Veg$Nutrient <- "Vegetable"
+sig.Veg1 <- sig.Veg[!(sig.Veg$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file19 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Getreideprodukte/all_results.tsv"
+sig.Grai <- as.data.frame(read_tsv(file19))
+sig.Grai$Nutrient <- "Grain_Products"
+sig.Grai1 <- sig.Grai[!(sig.Grai$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file20 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Kaffee/significant_results.tsv"
+sig.Coff <- as.data.frame(read_tsv(file20))
+sig.Coff$Nutrient <- "Coffee"
+sig.Coff1 <- sig.Coff[!(sig.Coff$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file21 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Milchprodukte/significant_results.tsv"
+sig.Diar <- as.data.frame(read_tsv(file21))
+sig.Diar$Nutrient <- "Diary_Products"
+sig.Diar1 <- sig.Diar[!(sig.Diar$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file22 <- "~/Documents/diversity_test /MaAsLin/maaslin3_results_Süßigkeiten/significant_results.tsv"
+sig.Swee <- as.data.frame(read_tsv(file22))
+sig.Swee$Nutrient <- "Sweets"
+sig.Swee1 <- sig.Swee[!(sig.Swee$value %in% c("Alter","Nein","w", "BMI")), ]
+
+
+
+# Kombiniere die Daten
+sig_results_food <- bind_rows(sig.Alco1, sig.Beer1, sig.Bean1, sig.Veg1, sig.Meat1, 
+                                  sig.Grai1, sig.Coff1, sig.Diar1, sig.Swee1)
+
+```
+
+```{r}
+file23 <- "~/Documents/MaAsLin/maaslin3_results_Calcium/all_results.tsv"
+data.Calc <- as.data.frame(read_tsv(file23))
+data.Calc$Nutrient <- "Calcium"
+
+file24 <- "~/Documents/MaAsLin/maaslin3_results_Carbohydrate/all_results.tsv"
+data.Carb <- as.data.frame(read_tsv(file24))
+data.Carb$Nutrient <- "Carbohydrate"
+
+file25 <- "~/Documents/MaAsLin/maaslin3_results_cholesterol/all_results.tsv"
+data.chol <- as.data.frame(read_tsv(file25))
+data.chol$Nutrient <- "cholesterol"
+
+file26 <- "~/Documents/MaAsLin/maaslin3_results_fat/all_results.tsv"
+data.fat <- as.data.frame(read_tsv(file26))
+data.fat$Nutrient <- "fat"
+
+file27 <- "~/Documents/MaAsLin/maaslin3_results_fat_PUFA/all_results.tsv"
+data.fatP <- as.data.frame(read_tsv(file27))
+data.fatP$Nutrient <- "fat_PUFA"
+
+file28 <- "~/Documents/MaAsLin/maaslin3_results_fiber/all_results.tsv"
+data.fibe <- as.data.frame(read_tsv(file28))
+data.fibe$Nutrient <- "fiber"
+
+file29 <- "~/Documents/MaAsLin/maaslin3_results_iron/all_results.tsv"
+data.iron <- as.data.frame(read_tsv(file29))
+data.iron$Nutrient <- "iron"
+
+file30 <- "~/Documents/MaAsLin/maaslin3_results_Magnesium/all_results.tsv"
+data.Magn <- as.data.frame(read_tsv(file30))
+data.Magn$Nutrient <- "Magnesium"
+
+file31 <- "~/Documents/MaAsLin/maaslin3_results_Phosphor/all_results.tsv"
+data.Phos <- as.data.frame(read_tsv(file31))
+data.Phos$Nutrient <- "Phosphor"
+
+file32 <- "~/Documents/MaAsLin/maaslin3_results_potassium/all_results.tsv"
+data.pota <- as.data.frame(read_tsv(file32))
+data.pota$Nutrient <- "potassium"
+
+file33 <- "~/Documents/MaAsLin/maaslin3_results_protein/all_results.tsv"
+data.prot <- as.data.frame(read_tsv(file33))
+data.prot$Nutrient <- "protein"
+
+file34 <- "~/Documents/MaAsLin/maaslin3_results_sodium/all_results.tsv"
+data.sodi <- as.data.frame(read_tsv(file34))
+data.sodi$Nutrient <- "sodium"
+
+file35 <- "~/Documents/MaAsLin/maaslin3_results_sugar/all_results.tsv"
+data.suga <- as.data.frame(read_tsv(file35))
+data.suga$Nutrient <- "sugar"
+
+# Kombiniere alle Daten in einen DataFrame
+results_nutrients <- bind_rows(data.Calc, data.Carb, data.chol, data.fat, data.fatP, 
+                              data.fibe, data.iron, data.Magn, data.Phos, data.pota, 
+                              data.prot, data.sodi, data.suga)
+
+```
+
+# signifikante ergebnisse einlesen 
+```{r}
+file36 <- "~/Documents/MaAsLin/maaslin3_results_Calcium/significant_results_Calcium.tsv"
+sig.Calc <- as.data.frame(read_tsv(file36))
+sig.Calc$Nutrient <- "Calcium"
+sig.Calc1 <- sig.Calc[!(sig.Calc$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file37 <- "~/Documents/MaAsLin/maaslin3_results_Carbohydrate/significant_results_Carbohydrate.tsv"
+sig.Carb <- as.data.frame(read_tsv(file37))
+sig.Carb$Nutrient <- "Carbohydrate"
+sig.Carb1 <- sig.Carb[!(sig.Carb$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file38 <- "~/Documents/MaAsLin/maaslin3_results_cholesterol/significant_results_cholesterol.tsv"
+sig.chol <- as.data.frame(read_tsv(file38))
+sig.chol$Nutrient <- "cholesterol"
+sig.chol1 <- sig.chol[!(sig.chol$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file39 <- "~/Documents/MaAsLin/maaslin3_results_fat/significant_results_fat.tsv"
+sig.fat <- as.data.frame(read_tsv(file39))
+sig.fat$Nutrient <- "fat"
+sig.fat1 <- sig.fat[!(sig.fat$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file40 <- "~/Documents/MaAsLin/maaslin3_results_fat_PUFA/significant_results_fat_PUFA.tsv"
+sig.fatP <- as.data.frame(read_tsv(file40))
+sig.fatP$Nutrient <- "fat_PUFA"
+sig.fatP1 <- sig.fatP[!(sig.fatP$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file41 <- "~/Documents/MaAsLin/maaslin3_results_fiber/significant_results_fiber.tsv"
+sig.fibe <- as.data.frame(read_tsv(file41))
+sig.fibe$Nutrient <- "fiber"
+sig.fibe1 <- sig.fibe[!(sig.fibe$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file42 <- "~/Documents/MaAsLin/maaslin3_results_iron/significant_results_iron.tsv"
+sig.iron <- as.data.frame(read_tsv(file42))
+sig.iron$Nutrient <- "iron"
+sig.iron1 <- sig.iron[!(sig.iron$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file43 <- "~/Documents/MaAsLin/maaslin3_results_Magnesium/significant_results_Magnesium.tsv"
+sig.Magn <- as.data.frame(read_tsv(file43))
+sig.Magn$Nutrient <- "Magnesium"
+sig.Magn1 <- sig.Magn[!(sig.Magn$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file44 <- "~/Documents/MaAsLin/maaslin3_results_Phosphor/significant_results_Phosphor.tsv"
+sig.Phos <- as.data.frame(read_tsv(file44))
+sig.Phos$Nutrient <- "Phosphor"
+sig.Phos1 <- sig.Phos[!(sig.Phos$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file45 <- "~/Documents/MaAsLin/maaslin3_results_potassium/significant_results_potassium.tsv"
+sig.pota <- as.data.frame(read_tsv(file45))
+sig.pota$Nutrient <- "potassium"
+sig.pota1 <- sig.pota[!(sig.pota$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file46 <- "~/Documents/MaAsLin/maaslin3_results_protein/significant_results.tsv"
+sig.prot <- as.data.frame(read_tsv(file46))
+sig.prot$Nutrient <- "protein"
+sig.prot1 <- sig.prot[!(sig.prot$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file47 <- "~/Documents/MaAsLin/maaslin3_results_sodium/significant_results_sodium.tsv"
+sig.sodi <- as.data.frame(read_tsv(file47))
+sig.sodi$Nutrient <- "sodium"
+sig.sodi1 <- sig.sodi[!(sig.sodi$value %in% c("Alter","Nein","w", "BMI")), ]
+
+file48 <- "~/Documents/MaAsLin/maaslin3_results_sugar/significant_results_sugar.tsv"
+sig.suga <- as.data.frame(read_tsv(file48))
+sig.suga$Nutrient <- "sugar"
+sig.suga1 <- sig.suga[!(sig.suga$value %in% c("Alter","Nein","w", "BMI")), ]
+
+# Kombiniere die Daten
+sig_results_nutrients <- bind_rows(sig.Carb1, sig.Calc1, sig.chol1, sig.fat1, sig.fatP1, 
+                                  sig.fibe1, sig.iron1, sig.Magn1, sig.Phos1, sig.pota1, 
+                                  sig.prot1, sig.sodi1, sig.suga1)
+
+```
+
+
+```{r}
+
+# Kennzeichnung der Herkunft der Daten
+sig_results_nutrients <- sig_results_nutrients %>%
+  mutate(Source = "Nutrient")
+
+sig_results_food <- sig_results_food %>%
+  mutate(Source = "Food_Group")
+
+# Beide Tabellen zusammenführen
+combined_sig_results <- bind_rows(sig_results_nutrients, sig_results_food)
+
+tab1 <- combined_sig_results
+```
+
+
+
+all results
+
+
+```{r}
+results_nutrients <- results_nutrients %>%
+  mutate(Source = "Nutrient")
+
+results_food <- results_food %>%
+  mutate(Source = "Food_Group")
+
+# Beide Tabellen zusammenführen
+df1 <- bind_rows(results_nutrients, results_food)
+
+```
+
+
+```{r}
+df2 <- df1[(df1$feature %in% combined_sig_results$feature), ]
+```
+
+```{r}
+df3 <- df2[!(df2$metadata %in% c("BMI", "Alter", "Geschlecht", "Rauchen.")), ]
+```
+
+prepare to plot
+
+
+
+```{r}
+tab1 <- df3[, c("feature", "Nutrient", "coef")]
+```
+
+```{r}
+tab2 <- tab1[!(tab1$feature %in% "NA."),  ]
+```
+
+
+```{r}
+genome10 <- tab2 %>%
+  pivot_wider(names_from = Nutrient, values_from = coef)
+
+genome1 <- na.omit(genome10)
+#genome110 <- genome1[!(genome1$feature %in% "NA."), ]
+
+```
+
+
+```{r}
+genome11 <- genome1 %>% column_to_rownames(var="feature")
+#genome111 <- mutate_all(genome11, function(x) as.numeric(as.character(x)))
+
+
+```
+
+```{r}
+colnames(genome11) <- c("Calcium", "Carbohydrate", "Cholesterol", "Fat", "PUFA", "Fiber", "Iron", "Magnesium", "Phosphor", "Potassium", "Protein", "Sodium", "Sugar", "Alcohol", "Beer", "Legumes", "Meat", "Vegetable", "Grain Products", "Coffee", "Diary Products", "Sweets")
+```
+
+```{r}
+genome111 <- mutate_all(genome11, function(x) as.numeric(as.character(x)))
+```
+
+
+```{r}
+genome22 <- as.matrix(genome111)
+
+```
+
+```{r}
+h <- heatmap(genome22)
+```
+
+```{r}
+heatmap(genome22)
+```
+
+prepare another annotation for significance of asv
+
+
+```{r}
+g <- df3[, c("feature", "Nutrient", "qval")]
+#g22 <- g[!duplicated(g$feature), ]
+
+g22 <- g
+```
+
+```{r}
+g2 <- g22[(g22$feature %in% genome1$feature), ]
+
+```
+
+```{r}
+p.genome1 <- g2 %>%
+  pivot_wider(names_from = Nutrient, values_from = qval)
+
+```
+
+```{r}
+colnames(p.genome1) <- c("feature", "Calcium", "Carbohydrate", "Cholesterol", "Fat", "PUFA", "Fiber", "Iron", "Magnesium", "Phosphor", "Potassium", "Protein", "Sodium", "Sugar","Alcohol", "Beer", "Legumes", "Meat", "Vegetable", "Grain Products", "Coffee", "Diary Products", "Sweets")
+```
+
+```{r}
+p.genome11 <- p.genome1 %>% column_to_rownames(var="feature")
+p.genome22 <- as.matrix(p.genome11)
+
+```
+
+```{r}
+# Zeilen (Bakterien) filtern: Mindestens eine Spalte muss p-Wert < 0.25 haben
+significant_rows <- apply(p.genome22, 1, function(x) any(x < 0.25))
+
+# Gefilterte Daten für signifikante Bakterien
+genome33 <- genome22[significant_rows, ]
+p.genome33 <- p.genome22[significant_rows, ]
+
+# Prüfen, ob gefilterte Daten korrekt sind
+dim(genome33) # Anzahl der verbleibenden Bakterien anzeigen
+```
+
+
+```{r}
+heatmap(p.genome33)
+```
+
+```{r}
+# Definiere die Gruppierung der Spalten
+column_grouping <- c(rep("Nutrient", 13), rep("Food Group", 9)) # 13 Nutrients, 9 Food Groups
+names(column_grouping) <- colnames(genome33) # Spaltennamen zuordnen
+```
+
+good one
+```{r}
+library("circlize")
+library("ComplexHeatmap")
+library("dendsort")
+
+# Cluster-Dendrogramm für die Zeilen (Bakterien)
+row_dend <- dendsort(hclust(dist(genome33)))
+
+# Farbskala für die Heatmap
+f2 <- colorRamp2(seq(min(genome33), max(genome33), length = 3), c("blue", "#EEEEEE", "red"), space = "RGB")
+
+# Erstelle die zweigeteilte Heatmap
+h3 <- Heatmap(genome33, 
+        name = "Coefficient", # Titel der Legende
+        col = f2,
+        cluster_rows = row_dend, 
+        cluster_columns = FALSE,
+        row_order = sort(rownames(genome33)),
+        column_split = column_grouping,  # 🔥 Hier wird die Heatmap in 2 Bereiche geteilt!
+        column_title = c("Food Groups", "Nutrients"), # Überschriften für die Bereiche
+        row_title = "Genus",
+        row_names_gp = gpar(fontsize = 8), # Schriftgröße für Zeilennamen
+        column_names_gp = gpar(fontsize = 8), # Schriftgröße für Spaltennamen
+        show_column_dend = FALSE,
+        column_names_rot = -45,
+        width = unit(10, "cm"), height = unit(18, "cm"),
+        row_names_max_width = max_text_width(rownames(genome33), gp = gpar(fontsize = 10)),
+        
+        # Füge Sternchen für p-Werte < 0.25 hinzu
+        cell_fun = function(j, i, x, y, w, h, fill) {
+	               if(p.genome33[i, j] < 0.25) {
+		               grid.text("*", x, y)
+	               }
+        })
+
+# Heatmap anzeigen
+h3
+
+
+#ggsave("heatmap.f1.png")
+```
+
