@@ -1,0 +1,276 @@
+---
+title: "MaAsLin"
+author: "Mona Hildebrandt "
+date: "`r Sys.Date()`"  
+output:
+   #BiocStyle::html_document:
+   html_document:
+     code_folding: hide
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+#library
+
+```{r}
+library("pasilla")
+library("tidyverse")
+library("DESeq2")
+library("pheatmap")
+library("RColorBrewer")
+library("apeglm")
+library("dplyr")
+library("Maaslin2")
+
+library("DEGreport")
+#Note: In some versions of Mac DEGreport will not be loaded successfully,
+#Try install Xquarz, restart Mac and R studio, and try to load again
+# https://www.xquartz.org/
+```
+
+#import data 
+```{r}
+# Phyloseq object AD filtered samples
+d.ps.filter.ad.st <- "~/Documents/diversity_test "
+ps.filter.ad.st <- "/1.ps.filter.pd.abundance.kompremiert.rds" %>%
+  paste0(d.ps.filter.ad.st,"/", .) %>% 
+  readRDS() 
+ps.filter.ad.st
+
+
+```
+
+subset only stool samples:
+```{r}
+ps.st <- subset_samples(ps.filter.ad.st, !(sample_names(ps.filter.ad.st) %in% "23Jul94-DL185"))
+ps.st
+str(ps.st)
+```
+
+
+```{r}
+# split/convert in phyloseq one table  
+dt <- psmelt(ps.st)
+```
+
+#prepare data
+
+```{r}
+dt2 <- as.data.frame(dt)
+```
+
+
+```{r}
+feature_table <- dt2 %>%
+  dplyr::select(Sample, Genus, Abundance) %>%
+  dplyr::group_by(Sample, Genus)
+  
+```
+
+```{r}
+feature_table2 <- feature_table %>%  
+  dplyr::summarise(Abundance = sum(Abundance, na.rm = TRUE))
+```
+
+```{r}
+feature_table3 <- feature_table2 %>%  
+  pivot_wider(names_from = Sample, values_from = Abundance, values_fill = 0) %>%
+  column_to_rownames("Genus")
+```
+
+
+```{r}
+# Metadaten erstellen
+meta_data <- dt %>%
+  dplyr::select(Sample, Rauchen., BMI, Alter, Geschlecht, Fleisch, Bohnen, Gemüse, Getreideprodukte, Milchprodukte, Kaffee, Bier, Alkohol, Süßigkeiten) %>%
+  dplyr::distinct() %>%
+   tibble::column_to_rownames("Sample")
+```
+
+
+
+# MaAsLin
+#Fleisch
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Fleisch",
+  fixed_effects = c("Fleisch", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Fleisch"
+```
+
+
+#Bohnen
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Bohnen",
+  fixed_effects = c("Bohnen", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Bohnen"
+```
+
+
+#Gemüse
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Gemüse",
+  fixed_effects = c("Gemüse", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Gemüse"
+```
+
+
+#Getreideprodukte
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Getreideprodukte",
+  fixed_effects = c("Getreideprodukte", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Getreideprodukte"
+```
+
+
+#Milchprodukte
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Milchprodukte",
+  fixed_effects = c("Milchprodukte", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_Milchprodukte"
+```
+
+#Kaffee
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Kaffee",
+  fixed_effects = c("Kaffee", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Kaffee"
+```
+
+#Bier
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Bier",
+  fixed_effects = c("Bier", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Bier"
+```
+
+#Alkohol
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Alkohol",
+  fixed_effects = c("Alkohol", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Alkohol"
+```
+
+#Süßigkeiten
+```{r}
+fit_data <- Maaslin2(
+  input_data = feature_table3,
+  input_metadata = meta_data,
+  output = "maaslin3_results_Süßigkeiten",
+  fixed_effects = c("Süßigkeiten", "BMI", "Alter", "Geschlecht", "Rauchen."),
+  normalization = "TSS",  
+  transform = "LOG",
+  analysis_method = "LM",
+  min_prevalence = 0.1,
+  cores = 4
+)
+```
+
+```{r}
+output_dir <- "/home/username/Documents/maaslin3_results_Süßigkeiten"
+```
+
+
+
+
+
+# Session info

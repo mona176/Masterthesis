@@ -1,0 +1,919 @@
+---
+title: "Merge files into phyloseq"
+author: "Mona Hildebrandt"
+date: "`r Sys.Date()`"
+output:
+   #BiocStyle::html_document:
+   html_document:
+     
+     code_folding: hide
+editor_options: 
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+
+
+# Pretty outputs
+library("rmarkdown")
+#library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library("ggpubr")
+
+# Set seed for reproducibility
+set.seed(100)
+
+# Set plotting theme
+theme_set(theme_few(base_size = 14))
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+```{r libraries, message=FALSE}
+library("magrittr")
+library("ggplot2")
+library("tidyverse")
+library("readxl")
+#library("dada2")
+library("phyloseq")
+library("gridExtra")
+library("vegan")
+library("plyr")
+library("scales")
+library("reshape2")
+#library("DESeq2")
+library("dplyr") #for data manipulation
+#library("msa") #multiple sequence alignment
+library("ape") #to create phylogenetic tree
+library("randomForest") 
+library("caret") 
+library("broom")
+library("mlbench")
+library("plotROC")
+
+```
+
+
+# Alpha diversity {.tabset}
+
+## No Filter taxa
+
+### Import data
+
+
+Filtered phyloseq, stool samples
+I have filtered here only ASV with prevalence > 5% of all samples
+```{r}
+# Phyloseq object AD filtered samples
+d.ps.filter.ad.st <- "~/Documents/diversity_test "
+ps.filter.ad.st <- "/1.ps.filter.pd.abundance.kompremiert.rds" %>%
+  paste0(d.ps.filter.ad.st,"/", .) %>% 
+  readRDS() 
+ps.filter.ad.st
+
+
+```
+
+subset only stool samples:
+
+
+```{r}
+ps.st <- ps.filter.ad.st
+ps.st
+```
+
+```{r}
+ps.st <- subset_samples(ps.filter.ad.st, !(sample_names(ps.filter.ad.st) %in% "23Jul94-DL185"))
+ps.st
+```
+
+
+
+### Rarefaction
+
+I rarefy samples before alpha diversity
+I will subsample to the min number of reads
+
+```{r}
+ps.rar <- rarefy_even_depth(ps.st, sample.size = min(sample_sums(ps.st)))
+ps.rar
+
+```
+
+
+### Calculate alpha diversity and plot 
+
+
+Calculate alpha diversity measures
+```{r}
+#Diversity values in one table only
+rich <- estimate_richness(ps.rar, measures = c("Shannon", "Chao1"))
+head(rich)
+
+```
+
+Prepare table: merge diversity measure results with metadata
+```{r}
+df <- cbind(sample_data(ps.rar), rich)
+```
+
+Lets have a look on the metadata table
+
+```{r}
+meta <- sample_data(ps.rar)
+```
+
+
+### Plot
+
+Edit: transform  tables to fit ggplot
+
+```{r}
+df55 <- df[c("Chao1", "Fleisch", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df55$Value <- df55$Chao1
+df55$Measure <- "Chao1"
+df55$Chao1 <- NULL
+
+
+df66 <- df[c("Shannon", "Fleisch", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df66$Value <- df66$Shannon
+df66$Measure <- "Shannon"
+df66$Shannon <- NULL
+```
+
+```{r}
+colnames(df55) <- c("Fleisch", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df66) <- c("Fleisch", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df55, aes(x=Fleisch, y=Value, color=Fleisch)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=4, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3")+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Meat")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.caho1.Fleisch.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df66, aes(x=Fleisch, y=Value, color=Fleisch)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3")+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Meat")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+ggsave("alpha.shannon.Fleisch.png")
+```
+
+
+
+##Hülsenfrüchte
+```{r}
+df99 <- df[c("Chao1", "Bohnen", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df99$Value <- df99$Chao1
+df99$Measure <- "Chao1"
+df99$Chao1 <- NULL
+
+
+df100<- df[c("Shannon", "Bohnen", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df100$Value <- df100$Shannon
+df100$Measure <- "Shannon"
+df100$Shannon <- NULL
+```
+
+```{r}
+colnames(df99) <- c("Bohnen", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df100) <- c("Bohnen", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df99, aes(x=Bohnen, y=Value, color=Bohnen)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "green4")+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Chao1)", x = "Legumes")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.chao1.Bohnen.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df100, aes(x=Bohnen, y=Value, color=Bohnen)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Legumes")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Bohnen.png")
+```
+
+
+##Gemüse
+```{r}
+df101 <- df[c("Chao1", "Gemüse", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df101$Value <- df101$Chao1
+df101$Measure <- "Chao1"
+df101$Chao1 <- NULL
+
+
+df102<- df[c("Shannon", "Gemüse", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df102$Value <- df102$Shannon
+df102$Measure <- "Shannon"
+df102$Shannon <- NULL
+```
+
+```{r}
+colnames(df101) <- c("Gemüse", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df102) <- c("Gemüse", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df101, aes(x=Gemüse, y=Value, color=Gemüse)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=4, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3")+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Vegetables")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.chao1.Gemüse.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df102, aes(x=Gemüse, y=Value, color=Gemüse)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Vegetables")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Gemüse.png")
+```
+
+
+
+##Getreideprodukte
+```{r}
+df105 <- df[c("Chao1", "Getreideprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df105$Value <- df105$Chao1
+df105$Measure <- "Chao1"
+df105$Chao1 <- NULL
+
+
+df106<- df[c("Shannon", "Getreideprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df106$Value <- df106$Shannon
+df106$Measure <- "Shannon"
+df106$Shannon <- NULL
+```
+
+```{r}
+colnames(df105) <- c("Getreideprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df106) <- c("Getreideprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df105, aes(x=Getreideprodukte, y=Value, color=Getreideprodukte)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=1.5, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3")+
+                        theme(text = element_text(size = 13)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Grain Products")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.chao1.Getreideprodukte.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df106, aes(x=Getreideprodukte, y=Value, color=Getreideprodukte)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Grain Products")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Getreideprodukte.png")
+```
+
+
+
+#Milchprodukte
+```{r}
+df107 <- df[c("Chao1", "Milchprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df107$Value <- df107$Chao1
+df107$Measure <- "Chao1"
+df107$Chao1 <- NULL
+
+
+df108<- df[c("Shannon", "Milchprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df108$Value <- df108$Shannon
+df108$Measure <- "Shannon"
+df108$Shannon <- NULL
+```
+
+```{r}
+colnames(df107) <- c("Milchprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df108) <- c("Milchprodukte", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df107, aes(x=Milchprodukte, y=Value, color=Milchprodukte)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "green4")+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Chao1)", x = "Dairy Products")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.chao1.Milchprodukte.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df108, aes(x=Milchprodukte, y=Value, color=Milchprodukte)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Dairy Products")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Milchprodukte.png")
+```
+
+
+
+#Kaffee
+```{r}
+df111 <- df[c("Chao1", "Kaffee", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df111$Value <- df111$Chao1
+df111$Measure <- "Chao1"
+df111$Chao1 <- NULL
+
+
+df112<- df[c("Shannon", "Kaffee", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df112$Value <- df112$Shannon
+df112$Measure <- "Shannon"
+df112$Shannon <- NULL
+```
+
+```{r}
+colnames(df111) <- c("Kaffee", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df112) <- c("Kaffee", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df111, aes(x=Kaffee, y=Value, color=Kaffee)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=4, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Coffee")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.chao1.Kaffee.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df112, aes(x=Kaffee, y=Value, color=Kaffee)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Coffee")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Kaffee.png")
+```
+
+
+#Calcium
+```{r}
+df113 <- df[c("Chao1", "Bier", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df113$Value <- df113$Chao1
+df113$Measure <- "Chao1"
+df113$Chao1 <- NULL
+
+
+df114<- df[c("Shannon", "Bier", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df114$Value <- df114$Shannon
+df114$Measure <- "Shannon"
+df114$Shannon <- NULL
+```
+
+```{r}
+colnames(df113) <- c("Bier", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df114) <- c("Bier", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df113, aes(x=Bier, y=Value, color=Bier)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=4, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Beer")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.chao1.Bier.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df114, aes(x=Bier, y=Value, color=Bier)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Beer")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Bier.png")
+```
+
+
+#Phosphorus
+```{r}
+df115 <- df[c("Chao1", "Alkohol", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df115$Value <- df115$Chao1
+df115$Measure <- "Chao1"
+df115$Chao1 <- NULL
+
+
+df116<- df[c("Shannon", "Alkohol", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df116$Value <- df116$Shannon
+df116$Measure <- "Shannon"
+df116$Shannon <- NULL
+```
+
+```{r}
+colnames(df115) <- c("Alkohol", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df116) <- c("Alkohol", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df115, aes(x=Alkohol, y=Value, color=Alkohol)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=1.3, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3")+
+                        theme(text = element_text(size = 13)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Alcohol")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.chao1.Alkohol.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df116, aes(x=Alkohol, y=Value, color=Alkohol)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Alcohol")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Alkohol.png")
+```
+
+
+#Magnesium
+```{r}
+df117 <- df[c("Chao1", "Süßigkeiten", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df117$Value <- df117$Chao1
+df117$Measure <- "Chao1"
+df117$Chao1 <- NULL
+
+
+df118<- df[c("Shannon", "Süßigkeiten", "BMI", "Geschlecht", "Alter", "Rauchen.")]
+df118$Value <- df118$Shannon
+df118$Measure <- "Shannon"
+df118$Shannon <- NULL
+```
+
+```{r}
+colnames(df117) <- c("Süßigkeiten", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+```{r}
+colnames(df118) <- c("Süßigkeiten", "BMI", "Geschlecht", "Alter", "Rauchen.", "Value" ,"Measure")
+```
+
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df117, aes(x=Süßigkeiten, y=Value, color=Süßigkeiten)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness (Chao1)", x = "Sweets")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+#ggsave("alpha.chao1.Süßigkeiten.png")
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df118, aes(x=Süßigkeiten, y=Value, color=Süßigkeiten)) + 
+     geom_point(na.rm = TRUE, color="darkblue", size=2, pch=18)+
+     geom_smooth(method=lm, se=FALSE, fullrange=TRUE, color = "red3", linewidth = 2)+
+                        theme(text = element_text(size = 40)) +
+                        #scale_colour_brewer(palette = "red") +
+                        labs(y="Diversity richness 
+  (Shannon)", x = "Sweets")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.3)))
+ 
+p
+  
+  
+ggsave("alpha.shannon.Süßigkeiten.png")
+```
+
+
+
+
+
+### test regression
+# Lineares Modell für Chao1 und Protein
+
+#Fleisch
+```{r}
+lm_chao1_fleisch <- lm(Value ~ Fleisch + BMI + Geschlecht + Alter + Rauchen., data = df55)
+summary(lm_chao1_fleisch)
+```
+
+```{r}
+lm_shannon_fleisch <- lm(Value ~ Fleisch + BMI + Geschlecht + Alter + Rauchen., data = df66)
+summary(lm_shannon_fleisch)
+```
+
+
+#Bohnen
+```{r}
+lm_chao1_Bohnen <- lm(Value ~ Bohnen + BMI + Geschlecht + Alter + Rauchen., data = df99)
+summary(lm_chao1_Bohnen)
+```
+
+```{r}
+lm_shannon_Bohnen <- lm(Value ~ Bohnen + BMI + Geschlecht + Alter + Rauchen., data = df100)
+summary(lm_shannon_Bohnen)
+```
+
+#Gemüse
+```{r}
+lm_chao1_Gemüse <- lm(Value ~ Gemüse + BMI + Geschlecht + Alter + Rauchen., data = df101)
+summary(lm_chao1_Gemüse)
+```
+
+```{r}
+lm_shannon_Gemüse <- lm(Value ~ Gemüse + BMI + Geschlecht + Alter + Rauchen., data = df102)
+summary(lm_shannon_Gemüse)
+```
+
+
+#Getreideprodukte
+```{r}
+lm_chao1_Getreideprodukte <- lm(Value ~ Getreideprodukte + BMI + Geschlecht + Alter + Rauchen., data = df105)
+summary(lm_chao1_Getreideprodukte)
+```
+
+```{r}
+lm_shannon_Getreideprodukte <- lm(Value ~ Getreideprodukte + BMI + Geschlecht + Alter + Rauchen., data = df106)
+summary(lm_shannon_Getreideprodukte)
+```
+
+#Milchprodukte
+```{r}
+lm_chao1_Milchprodukte <- lm(Value ~ Milchprodukte + BMI + Geschlecht + Alter + Rauchen., data = df107)
+summary(lm_chao1_Milchprodukte)
+```
+
+```{r}
+lm_shannon_Milchprodukte <- lm(Value ~ Milchprodukte + BMI + Geschlecht + Alter + Rauchen., data = df108)
+summary(lm_shannon_Milchprodukte)
+```
+
+#Kaffee
+```{r}
+lm_chao1_Kaffee <- lm(Value ~ Kaffee + BMI + Geschlecht + Alter + Rauchen., data = df111)
+summary(lm_chao1_Kaffee)
+```
+
+```{r}
+lm_shannon_Kaffee <- lm(Value ~ Kaffee + BMI + Geschlecht + Alter + Rauchen., data = df112)
+summary(lm_shannon_Kaffee)
+```
+
+#Bier
+```{r}
+lm_chao1_Bier <- lm(Value ~ Bier + BMI + Geschlecht + Alter + Rauchen., data = df113)
+summary(lm_chao1_Bier)
+```
+
+```{r}
+lm_shannon_Bier <- lm(Value ~ Bier + BMI + Geschlecht + Alter + Rauchen., data = df114)
+summary(lm_shannon_Bier)
+```
+
+#Alkohol
+```{r}
+lm_chao1_Alkohol <- lm(Value ~ Alkohol + BMI + Geschlecht + Alter + Rauchen., data = df115)
+summary(lm_chao1_Alkohol)
+```
+
+```{r}
+lm_shannon_Alkohol <- lm(Value ~ Alkohol + BMI + Geschlecht + Alter + Rauchen., data = df116)
+summary(lm_shannon_Alkohol)
+```
+
+#Süßigkeiten
+```{r}
+lm_chao1_Süßigkeiten <- lm(Value ~ Süßigkeiten  + BMI + Geschlecht + Alter + Rauchen., data = df117)
+summary(lm_chao1_Süßigkeiten)
+```
+
+```{r}
+lm_shannon_Süßigkeiten <- lm(Value ~ Süßigkeiten + BMI + Geschlecht + Alter + Rauchen., data = df118)
+summary(lm_shannon_Süßigkeiten)
+```
+
+
+```{r}
+# Definition der Modelle mit den neuen Spaltennamen
+nutrient_models <- list(
+  Fleisch = list(chao1 = summary(lm_chao1_fleisch), shannon = summary(lm_shannon_fleisch)),
+  Bohnen = list(chao1 = summary(lm_chao1_Bohnen), shannon = summary(lm_shannon_Bohnen)),
+  Gemüse = list(chao1 = summary(lm_chao1_Gemüse), shannon = summary(lm_shannon_Gemüse)),
+  Getreideprodukte = list(chao1 = summary(lm_chao1_Getreideprodukte), shannon = summary(lm_shannon_Getreideprodukte)),
+  Milchprodukte = list(chao1 = summary(lm_chao1_Milchprodukte), shannon = summary(lm_shannon_Milchprodukte)),
+  Kaffee = list(chao1 = summary(lm_chao1_Kaffee), shannon = summary(lm_shannon_Kaffee)),
+  Bier = list(chao1 = summary(lm_chao1_Bier), shannon = summary(lm_shannon_Bier)),
+  Alkohol = list(chao1 = summary(lm_chao1_Alkohol), shannon = summary(lm_shannon_Alkohol)),
+  Süßigkeiten = list(chao1 = summary(lm_chao1_Süßigkeiten), shannon = summary(lm_shannon_Süßigkeiten))
+)
+
+# Leere Liste zur Speicherung der Ergebnisse
+results_list <- list()
+
+# Schleife zur Verarbeitung der Ergebnisse
+for (nutrient in names(nutrient_models)) {
+  # Extrahiere die Modelle
+  chao1_model <- nutrient_models[[nutrient]]$chao1
+  shannon_model <- nutrient_models[[nutrient]]$shannon
+
+  # Extrahiere Ergebnisse für Chao1
+  terms_chao1 <- rownames(chao1_model$coefficients)
+  t_chao1 <- data.frame(
+    Metric = "Chao1",
+    Nutrient = nutrient,
+    Term = terms_chao1,
+    Estimate = chao1_model$coefficients[, "Estimate"],
+    StdError = chao1_model$coefficients[, "Std. Error"],
+    tValue = chao1_model$coefficients[, "t value"],
+    Pvalue = chao1_model$coefficients[, "Pr(>|t|)"]
+  )
+
+  # Extrahiere Ergebnisse für Shannon
+  terms_shannon <- rownames(shannon_model$coefficients)
+  t_shannon <- data.frame(
+    Metric = "Shannon",
+    Nutrient = nutrient,
+    Term = terms_shannon,
+    Estimate = shannon_model$coefficients[, "Estimate"],
+    StdError = shannon_model$coefficients[, "Std. Error"],
+    tValue = shannon_model$coefficients[, "t value"],
+    Pvalue = shannon_model$coefficients[, "Pr(>|t|)"]
+  )
+
+  # Kombiniere die Ergebnisse
+  results_list[[nutrient]] <- rbind(t_chao1, t_shannon)
+}
+
+# Ergebnisse in eine Tabelle zusammenführen
+final_table <- do.call(rbind, results_list)
+
+# P-Werte anpassen (Benjamini-Hochberg)
+final_table$Pvalue_adj <- p.adjust(final_table$Pvalue, method = "BH")
+
+# Sternchen für P-Werte hinzufügen
+final_table$Pvalue <- paste0(
+  round(final_table$Pvalue, 4),
+  ifelse(final_table$Pvalue < 0.001, "***",
+         ifelse(final_table$Pvalue < 0.01, "**",
+                ifelse(final_table$Pvalue < 0.05, "*", "")))
+)
+
+# Sternchen für angepasste P-Werte hinzufügen
+final_table$Pvalue_adj <- paste0(
+  round(as.numeric(gsub("\\*", "", final_table$Pvalue_adj)), 4),
+  ifelse(as.numeric(gsub("\\*", "", final_table$Pvalue_adj)) < 0.001, "***",
+         ifelse(as.numeric(gsub("\\*", "", final_table$Pvalue_adj)) < 0.01, "**",
+                ifelse(as.numeric(gsub("\\*", "", final_table$Pvalue_adj)) < 0.05, "*", "")))
+)
+
+# Ergebnisse anzeigen
+final_table
+
+```
+
+```{r}
+library(openxlsx)
+write.xlsx(final_table, "2.aplpha.results.xlsx")
+```
+
+
+
+# p-value adjust with BH
+
+#protein
+```{r}
+# Füge eine Spalte für die angepassten p-Werte hinzu
+lm_results_protein <- data.frame(
+  Variable = c("Protein", "BMI", "Geschlecht", "Alter", "Rauchen"),
+  Estimate = c(0.469, -0.445, 2.525, 0.291, -2.251),
+  PValue = c(0.33, 0.48, 0.65, 0.22, 0.81)
+)
+
+# Benjamini-Hochberg-Korrektur anwenden
+lm_results_protein$AdjustedPValue <- p.adjust(lm_results_protein$PValue, method = "BH")
+
+# Ausgabe der Ergebnisse
+print(lm_results_protein)
+```
+
+
+#magnesium
+```{r}
+# Füge eine Spalte für die angepassten p-Werte hinzu
+lm_results <- data.frame(
+  Variable = c("Magnesium", "BMI", "Geschlecht", "Alter", "Rauchen"),
+  Estimate = c(-0.04128, -0.00520, -0.04774, 0.00347, -0.02944),
+  PValue = c(0.041, 0.311, 0.297, 0.080, 0.701)
+)
+
+# Benjamini-Hochberg-Korrektur anwenden
+lm_results$AdjustedPValue <- p.adjust(lm_results$PValue, method = "BH")
+
+# Ausgabe der Ergebnisse
+print(lm_results)
+```
+
+# Session info

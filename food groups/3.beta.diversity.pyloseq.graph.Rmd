@@ -1,0 +1,598 @@
+---
+title: "Merge files into phyloseq"
+author: "Mona Hildebrandt"
+date: "`r Sys.Date()`"
+output:
+   #BiocStyle::html_document:
+   html_document:
+     
+     code_folding: hide
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+
+
+# Pretty outputs
+library("rmarkdown")
+#library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library("ggpubr")
+
+# Set seed for reproducibility
+set.seed(100)
+
+# Set plotting theme
+theme_set(theme_few(base_size = 14))
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+```{r libraries, message=FALSE}
+library("magrittr")
+library("ggplot2")
+library("tidyverse")
+library("readxl")
+#library("dada2")
+library("phyloseq")
+library("gridExtra")
+library("vegan")
+library("plyr")
+library("scales")
+library("reshape2")
+#library("DESeq2")
+library("dplyr") #for data manipulation
+#library("msa") #multiple sequence alignment
+library("ape") #to create phylogenetic tree
+library("randomForest") 
+library("caret") 
+library("broom")
+library("mlbench")
+library("plotROC")
+library("viridis")
+
+```
+
+
+# Beta Diversity
+
+## No Filter taxa
+
+### Import data
+
+
+Filtered phyloseq, stool samples
+I have filtered here only ASV with prevalence > 5% of all samples
+```{r}
+# Phyloseq object AD filtered samples
+d.ps.filter.ad.st <- "~/Documents/diversity_test "
+ps.filter.ad.st <- "/1.ps.filter.pd.abundance.kompremiert.rds" %>%
+  paste0(d.ps.filter.ad.st,"/", .) %>% 
+  readRDS() 
+ps.filter.ad.st
+```
+
+subset only stool samples:
+
+```{r}
+ps.st <- subset_samples(ps.filter.ad.st, !(sample_names(ps.filter.ad.st) %in% "23Jul94-DL185"))
+ps.st
+```
+
+
+
+
+
+# Beta diversity
+
+  * How different is the microbial composition in one environment compared to another?
+  * We compute the dissimilarity matrix using one of the appropriate distances for microbiome data: Bray-Curtis.
+    
+  
+
+## Distance matrix
+```{r}
+#Bray-Curtis for ST samples:
+bray_dist = phyloseq::distance(ps.st, method="bray", weighted=T)
+```
+
+```{r, results='hide'}
+o.outlier <- outlier(as.matrix(bray_dist),thresh=-2.8,y=0.5)
+o.outlier                                    
+plot(o.outlier) 
+
+##Sample "J31621" is outlier, remove it
+#21Jun164-DL038, J31621 , I20206, 21May3544-DL370, J31637 
+
+```
+
+# Ordination
+Measures the similarity of the samples and projects this measure into 2-dimensions.
+
+## NMDS 
+**Stress**: value representing the difference between distance in the reduced dimension compared to the complete multidimensional space.
+
+**NMDS**: tries to minimize the stress value using gradient decent.
+
+
+```{r, out.width="60%" , warning=FALSE, message=FALSE}
+
+# Plot NMDS: using bray distances by defult. 
+ordination2 <- ordinate(ps.st, method = "NMDS" )
+ordination2
+```
+
+
+```{r}
+#Add centroids
+NMDS1 <- ordination2$points[,1]
+NMDS2 <- ordination2$points[,2]
+
+```
+
+```{r}
+d <- data.frame(sample_data(ps.st))
+```
+
+
+
+
+
+#Fleisch
+```{r}
+Fleisch <- sample_data(ps.st)$Fleisch
+df1 <- data.frame(Fleisch, NMDS1, NMDS2)
+```
+
+```{r}
+p1 <- ggplot(df1, aes(x = NMDS1, y = NMDS2, color = Fleisch)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Meat") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Meat", x = "NMDS1", y = "NMDS2")
+p1
+
+ggsave("beta.Fleisch.png")
+```
+
+
+
+#Bohnen
+```{r}
+Bohnen <- sample_data(ps.st)$Bohnen
+df3 <- data.frame(Bohnen, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p3 <- ggplot(df3, aes(x = NMDS1, y = NMDS2, color = Bohnen)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Beans") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Beans", x = "NMDS1", y = "NMDS2")
+p3
+
+ggsave("beta.Bohnen.png")
+```
+
+#Gemüse
+```{r}
+Gemüse <- sample_data(ps.st)$Gemüse
+df4 <- data.frame(Gemüse, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p4 <- ggplot(df4, aes(x = NMDS1, y = NMDS2, color = Gemüse)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Vegetables") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Vegetables", x = "NMDS1", y = "NMDS2")
+p4
+
+ggsave("beta.Gemüse.png")
+```
+
+
+
+#Getreideprodukte
+```{r}
+Getreideprodukte <- sample_data(ps.st)$Getreideprodukte
+df6 <- data.frame(Getreideprodukte, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p6 <- ggplot(df6, aes(x = NMDS1, y = NMDS2, color = Getreideprodukte)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Grain Products") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Grain Products", x = "NMDS1", y = "NMDS2")
+p6
+
+ggsave("beta.Getreideprodukte.png")
+```
+
+#Milchprodukte 
+```{r}
+Milchprodukte <- sample_data(ps.st)$Milchprodukte 
+df7 <- data.frame(Milchprodukte, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p7 <- ggplot(df7, aes(x = NMDS1, y = NMDS2, color = Milchprodukte)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Milchprodukte") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Milchprodukte", x = "NMDS1", y = "NMDS2")
+p7
+
+ggsave("beta.Milchprodukte.png")
+```
+
+
+
+#Kaffee 
+```{r}
+Kaffee <- sample_data(ps.st)$Kaffee
+df9 <- data.frame(Kaffee, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p9 <- ggplot(df9, aes(x = NMDS1, y = NMDS2, color = Kaffee)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Coffee") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Coffee", x = "NMDS1", y = "NMDS2")
+p9
+
+ggsave("beta.Kaffee.png")
+```
+
+#Bier
+```{r}
+Bier <- sample_data(ps.st)$Bier
+df10 <- data.frame(Bier, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p10 <- ggplot(df10, aes(x = NMDS1, y = NMDS2, color = Bier)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Beer") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Beer", x = "NMDS1", y = "NMDS2")
+p10
+
+ggsave("beta.Bier.png")
+```
+
+#Alkohol
+```{r}
+Alkohol <- sample_data(ps.st)$Alkohol
+df11 <- data.frame(Alkohol, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p11 <- ggplot(df11, aes(x = NMDS1, y = NMDS2, color = Alkohol)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Alcohol") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Alcohol", x = "NMDS1", y = "NMDS2")
+p11
+
+ggsave("beta.Alkohol.png")
+```
+
+#Süßigkeiten
+```{r}
+Süßigkeiten <- sample_data(ps.st)$Süßigkeiten
+df12 <- data.frame(Süßigkeiten, NMDS1, NMDS2)
+```
+
+```{r}
+# set the plot with colour 
+p12 <- ggplot(df12, aes(x = NMDS1, y = NMDS2, color = Süßigkeiten)) +
+  geom_point(size = 1.5, alpha = 0.8) +
+  scale_color_viridis(option = "D", direction = -1, name = "Sweets") +  
+  theme_minimal() +
+  labs(title = "NMDS Plot - Sweets", x = "NMDS1", y = "NMDS2")
+p12
+
+ggsave("beta.Süßigkeiten.png")
+```
+
+<!-- #Iron -->
+<!-- ```{r} -->
+<!-- Iron <- sample_data(ps.st)$Eisen -->
+<!-- df13 <- data.frame(Iron, NMDS1, NMDS2) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # set the plot with colour  -->
+<!-- p13 <- ggplot(df13, aes(x = NMDS1, y = NMDS2, color = Iron)) + -->
+<!--   geom_point(size = 1.5, alpha = 0.8) + -->
+<!--   scale_color_viridis(option = "D", direction = -1, name = "Iron (%)") +   -->
+<!--   theme_minimal() + -->
+<!--   labs(title = "NMDS Plot - Iron", x = "NMDS1", y = "NMDS2") -->
+<!-- p13 -->
+
+<!-- ggsave("beta..png") -->
+<!-- ``` -->
+
+
+#Test
+
+
+## Multivariate: Permanova
+
+**Aim**: test of differences in microbial composition between 2 or more groups of samples.
+
+**Method**: PERMANOVA
+
+**Hypothesis testing**: centroids of Group clusters differ.
+
+**Statistics**: test for simmilarity based on a chosen distance (here Bray-Curtis).
+
+
+Separate groups
+
+```{r}
+#Bray-Curtis for ST samples:
+bray1 = phyloseq::distance(ps.st, method="bray", weighted=T)
+
+```
+
+##Macronutrients
+#Fleisch
+```{r}
+permanova1 <- adonis2(bray1 ~ sample_data(ps.st)$Fleisch + Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova1
+```
+
+```{r}
+#tables
+t1 <- data.frame(Test = "Adonis",
+                 Nutrient="Fleisch",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova1$Df,
+                 SumOfSqs = permanova1$SumOfSqs,
+                 R2= permanova1$R2,
+                 F=permanova1$F,
+                 Pvalue=permanova1$`Pr(>F)`)
+```
+
+# ```{r}
+# # Füge den p-Wert und R2-Wert in den Titel des Plots ein
+# p1 + ggtitle(paste("Protein - NMDS (Bray-Curtis)\nPERMANOVA: R² =", round(permanova1$R2, 3), 
+#                    "p =", signif(permanova1$`Pr(>F)`, 3)))
+# 
+# ```
+
+
+#Bohnen
+```{r}
+permanova3 <- adonis2(bray1 ~ sample_data(ps.st)$Bohnen+ Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova3
+```
+
+```{r}
+#tables
+t3 <- data.frame(Test = "Adonis",
+                 Nutrient="Bohnen",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova3$Df,
+                 SumOfSqs = permanova3$SumOfSqs,
+                 R2= permanova3$R2,
+                 F=permanova3$F,
+                 Pvalue=permanova3$`Pr(>F)`)
+```
+
+
+#Gemüse
+```{r}
+permanova4 <- adonis2(bray1 ~ sample_data(ps.st)$Gemüse+ Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova4
+```
+
+```{r}
+#tables
+t4 <- data.frame(Test = "Adonis",
+                 Nutrient="Gemüse",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova4$Df,
+                 SumOfSqs = permanova4$SumOfSqs,
+                 R2= permanova4$R2,
+                 F=permanova4$F,
+                 Pvalue=permanova4$`Pr(>F)`)
+```
+
+
+#Getreideprodukte
+```{r}
+permanova6 <- adonis2(bray1 ~ sample_data(ps.st)$Getreideprodukte + Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova6
+```
+
+```{r}
+#tables
+t6 <- data.frame(Test = "Adonis",
+                 Nutrient="Getreideprodukte",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova6$Df,
+                 SumOfSqs = permanova6$SumOfSqs,
+                 R2= permanova6$R2,
+                 F=permanova6$F,
+                 Pvalue=permanova6$`Pr(>F)`)
+```
+
+#Milchprodukte
+```{r}
+permanova7 <- adonis2(bray1 ~ sample_data(ps.st)$Milchprodukte + Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova7
+```
+
+```{r}
+#tables
+t7 <- data.frame(Test = "Adonis",
+                 Nutrient="Milchprodukte",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova7$Df,
+                 SumOfSqs = permanova7$SumOfSqs,
+                 R2= permanova7$R2,
+                 F=permanova7$F,
+                 Pvalue=permanova7$`Pr(>F)`)
+```
+
+
+#Kaffee
+```{r}
+permanova9 <- adonis2(bray1 ~ sample_data(ps.st)$Kaffee+ Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova9
+```
+
+```{r}
+#tables
+t9 <- data.frame(Test = "Adonis",
+                 Nutrient="Kaffee",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova9$Df,
+                 SumOfSqs = permanova9$SumOfSqs,
+                 R2= permanova9$R2,
+                 F=permanova9$F,
+                 Pvalue=permanova9$`Pr(>F)`)
+```
+
+#Bier
+```{r}
+permanova10 <- adonis2(bray1 ~ sample_data(ps.st)$Bier+ Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova10
+```
+
+```{r}
+#tables
+t10 <- data.frame(Test = "Adonis",
+                 Nutrient="Bier",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova10$Df,
+                 SumOfSqs = permanova10$SumOfSqs,
+                 R2= permanova10$R2,
+                 F=permanova10$F,
+                 Pvalue=permanova10$`Pr(>F)`)
+```
+
+#Alkohol
+```{r}
+permanova11 <- adonis2(bray1 ~ sample_data(ps.st)$Alkohol+ Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova11
+```
+
+```{r}
+#tables
+t11 <- data.frame(Test = "Adonis",
+                 Nutrient="Alkohol",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova11$Df,
+                 SumOfSqs = permanova11$SumOfSqs,
+                 R2= permanova11$R2,
+                 F=permanova11$F,
+                 Pvalue=permanova11$`Pr(>F)`)
+```
+
+#Süßigkeiten
+```{r}
+permanova12 <- adonis2(bray1 ~ sample_data(ps.st)$Süßigkeiten+ Geschlecht + BMI + Alter + Rauchen., data = ps.st%>% sample_data() %>% data.frame(), by = "terms")
+permanova12
+```
+
+```{r}
+#tables
+t12 <- data.frame(Test = "Adonis",
+                 Nutrient="Süßigkeiten",
+                 Distance = "Bray",
+                 Term = terms,
+                 Df = permanova12$Df,
+                 SumOfSqs = permanova12$SumOfSqs,
+                 R2= permanova12$R2,
+                 F=permanova12$F,
+                 Pvalue=permanova12$`Pr(>F)`)
+```
+
+
+
+```{r}
+# Installiere notwendige Pakete (falls nicht installiert)
+if (!require("writexl")) install.packages("writexl")
+
+# Lade das Paket
+library(writexl)
+
+# Kombiniere die Tabellen t11 und t12
+combined_table <- rbind(t1, t3, t4, t6, t7, t9, t10, t11, t12)
+```
+
+```{r}
+# Berechne die angepassten P-Werte (Benjamini-Hochberg)
+combined_table$Pvalue_adj <- p.adjust(combined_table$Pvalue, method = "BH")
+
+# Füge Signifikanzsternchen zu `Pvalue` hinzu
+combined_table$Pvalue <- paste0(
+  round(combined_table$Pvalue, 4),  # Runde auf 4 Dezimalstellen
+  ifelse(combined_table$Pvalue < 0.001, "***",
+         ifelse(combined_table$Pvalue < 0.01, "**",
+                ifelse(combined_table$Pvalue < 0.05, "*", "")))
+)
+
+# Füge Signifikanzsternchen zu `Pvalue_adj` hinzu
+combined_table$Pvalue_adj <- paste0(
+  round(combined_table$Pvalue_adj, 4),  # Runde auf 4 Dezimalstellen
+  ifelse(combined_table$Pvalue_adj < 0.001, "***",
+         ifelse(combined_table$Pvalue_adj < 0.01, "**",
+                ifelse(combined_table$Pvalue_adj < 0.05, "*", "")))
+)
+```
+
+```{r}
+# Speichere die aktualisierte Tabelle als Excel-Datei
+write_xlsx(combined_table, "3.results.beta2.xlsx")
+```
+
+
+
