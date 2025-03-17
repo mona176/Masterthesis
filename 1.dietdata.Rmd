@@ -1,0 +1,294 @@
+---
+title: "Demographic statistics PD"
+author: "Alba"
+date: "`r Sys.Date()`"
+output:
+   #BiocStyle::html_document:
+   html_document:
+     
+     code_folding: hide
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+
+
+# Pretty outputs
+library("rmarkdown")
+#library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library("ggpubr")
+
+# Set seed for reproducibility
+set.seed(100)
+
+# Set plotting theme
+theme_set(theme_few(base_size = 14))
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+```{r libraries, message=FALSE}
+library("magrittr")
+library("ggplot2")
+library("tidyverse")
+library("readxl")
+#library("dada2")
+library("phyloseq")
+library("gridExtra")
+library("vegan")
+library("plyr")
+library("scales")
+library("reshape2")
+#library("DESeq2")
+library("dplyr") #for data manipulation
+#library("msa") #multiple sequence alignment
+library("ape") #to create phylogenetic tree
+library("randomForest") 
+library("caret") 
+library("broom")
+library("mlbench")
+library("plotROC")
+
+```
+
+## Import data
+
+Number of participants in each Group
+
+
+```{r}
+#import MS table
+library(readxl)
+edit_data_348 <- read_excel("Documents/dietproject/Microbiom/edit.data.348.xlsx")
+View(Na_hrstoffe)
+
+
+pd1 <- as.data.frame(edit_data_348)
+
+```
+
+edit table
+remove na values
+
+```{r}
+dt <- na.omit(pd1)
+```
+
+mean of patient data
+
+```{r}
+#mean of age
+age <- mean(dt$Alter)
+age1 <- sd(dt$Alter)
+```
+
+```{r}
+#mean of BMI
+BMI <- mean(dt$BMI)
+BMI1 <- sd(dt$BMI)
+```
+
+```{r}
+# Umwandeln der "ja"/"nein" Antworten in numerische Werte (ja = 1, nein = 0)
+dt$raucher_num <- ifelse(dt$Rauchen. == "Ja", 1, 0)
+
+# Berechnen des Durchschnitts und in einer neuen Variable speichern
+smokers <- mean(dt$raucher_num, na.rm = TRUE)
+smokers1 <- sd(dt$raucher_num, na.rm = TRUE)
+```
+
+```{r}
+# Umwandeln der "ja"/"nein" Antworten in numerische Werte (ja = 1, nein = 0)
+dt$male_num <- ifelse(dt$Geschlecht == "m", 1, 0)
+
+# Berechnen des Durchschnitts und in einer neuen Variable speichern
+male <- mean(dt$male_num)
+male1 <- sd(dt$male_num)
+```
+
+
+mean of macronutrients 
+
+
+```{r}
+#mean of protein
+a <- mean(dt$Protein.in..)
+a1 <- sd(dt$Protein.in..)
+```
+
+
+```{r}
+#mean of fat
+b <- mean(dt$Fett.in..)
+b1 <- sd(dt$Fett.in..)
+```
+
+
+```{r}
+#mean of fat_MUFS
+c <- mean(dt$Fett_MUFS.in..)
+c1 <- sd(dt$Fett_MUFS.in..)
+```
+
+
+```{r}
+#mean of carbs
+d <- mean(dt$Kohlenhydrate.in..)
+d1 <- sd(dt$Kohlenhydrate.in..)
+```
+
+
+```{r}
+#mean of sugar
+e <- mean(dt$davon_Zucker.in..)
+e1 <- sd(dt$davon_Zucker.in..)
+```
+
+
+```{r}
+#mean of fiber
+f <- mean(dt$Ballaststoffe.in..)
+f1 <- sd(dt$Ballaststoffe.in..)
+```
+
+
+
+mean of micronutrients
+
+```{r}
+# mean of Cholesterin
+g <- mean(dt$Cholesterin)
+g1 <- sd(dt$Cholesterin)
+```
+
+
+```{r}
+# mean of Natrium
+h <- mean(dt$Natrium)
+h1 <- sd(dt$Natrium)
+```
+
+
+```{r}
+# mean of Kalium
+i <- mean(dt$Kalium)
+i1 <- sd(dt$Kalium)
+```
+
+
+```{r}
+# mean of Calcium
+j <- mean(dt$Calcium)
+j1 <- sd(dt$Calcium)
+```
+
+
+```{r}
+# mean of Phosphor
+k <- mean(dt$Phosphor)
+k1 <- sd(dt$Phosphor)
+```
+
+
+```{r}
+# mean of Magnesium
+l <- mean(dt$Magnesium)
+l1 <- sd(dt$Magnesium)
+```
+
+
+```{r}
+# mean of Eisen
+m <- mean(dt$Eisen)
+m1 <- sd(dt$Eisen)
+```
+
+
+
+# gerate a tble 
+
+```{r}
+# Beispielwerte (hier müssen deine echten Werte stehen)
+mean_fett <- b
+sd_fett <- b1
+
+mean_kohlenhydrate <- d
+sd_kohlenhydrate <- d1
+
+mean_protein <- a
+sd_protein <- a1
+```
+
+```{r}
+# Runden auf 2 Dezimalstellen
+mean_fett_gerundet <- round(mean_fett, 2)
+sd_fett_gerundet <- round(sd_fett, 2)
+
+mean_kohlenhydrate_gerundet <- round(mean_kohlenhydrate, 2)
+sd_kohlenhydrate_gerundet <- round(sd_kohlenhydrate, 2)
+
+mean_protein_gerundet <- round(mean_protein, 2)
+sd_protein_gerundet <- round(sd_protein, 2)
+```
+
+```{r}
+# Fett: mean ± SD
+fett_text <- paste0(mean_fett_gerundet, " ± ", sd_fett_gerundet)
+
+# Kohlenhydrate: mean ± SD
+kohlenhydrate_text <- paste0(mean_kohlenhydrate_gerundet, " ± ", sd_kohlenhydrate_gerundet)
+
+# Protein: mean ± SD
+protein_text <- paste0(mean_protein_gerundet, " ± ", sd_protein_gerundet)
+
+```
+
+```{r}
+# Erstelle eine Tabelle mit den formatierten Werten
+data.table <- data.frame(
+  Nährstoff = c("Fett", "Kohlenhydrate", "Protein"),
+  "Mean ± SD" = c(fett_text, kohlenhydrate_text, protein_text)
+)
+
+# Tabelle anzeigen
+print(data.table)
+
+```
+
+
+
+
+
+
+
+# Sesion info
+```{r}
+#sessionInfo()
+```

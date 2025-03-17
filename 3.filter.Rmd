@@ -1,0 +1,255 @@
+---
+title: "Merge files into phyloseq"
+author: "Alba Troci"
+date: "`r Sys.Date()`"
+output:
+   #BiocStyle::html_document:
+   html_document:
+     
+     code_folding: hide
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+
+
+# Pretty outputs
+library("rmarkdown")
+#library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library("ggpubr")
+
+# Set seed for reproducibility
+set.seed(100)
+
+# Set plotting theme
+theme_set(theme_few(base_size = 14))
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+```{r libraries, message=FALSE}
+library("magrittr")
+library("ggplot2")
+library("tidyverse")
+library("readxl")
+#library("dada2")
+library("phyloseq")
+library("gridExtra")
+library("vegan")
+library("plyr")
+library("scales")
+library("reshape2")
+#library("DESeq2")
+library("dplyr") #for data manipulation
+#library("msa") #multiple sequence alignment
+library("ape") #to create phylogenetic tree
+library("randomForest") 
+library("caret") 
+library("broom")
+library("mlbench")
+library("plotROC")
+
+```
+
+
+## Import data
+
+```{r import data}
+# Phyloseq object MS samples
+d.ps.ad.st <- "~/Documents/dietproject"
+ps.ad.st <- "/ps.diet.rds" %>%
+  paste0(d.ps.ad.st,"/", .) %>% 
+  readRDS() 
+ps.ad.st
+
+```
+
+
+**Sample Summary**
+
+* Make a sample summary to see the distribution of total sample reads.
+
+```{r, out.width="60%"}
+#total nr of read counts of each sample
+summary(sample_sums(ps.ad.st))
+sample_sum_df <- data.frame(sum = sample_sums(ps.ad.st))
+
+# Histogram of sample read counts
+p <- ggplot(sample_sum_df, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "steelblue", binwidth = 2500) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("Frequency") +
+  theme(axis.title.y = element_blank())
+p
+
+```
+
+
+remove sample J10153 because has only 1 read
+
+```{r}
+#extract metadata table
+dt <- sample_data(ps.ad.st)
+```
+
+```{r}
+#extract metadata table
+tax <- data.frame(tax_table(ps.ad.st))
+```
+
+
+```{r}
+
+ps <- subset_samples(ps.ad.st, !(NGS_ID %in% "J10153"))
+ps
+```
+
+
+```{r, out.width="60%"}
+#total nr of read counts of each sample
+sample_sum_df1 <- data.frame(sum = sample_sums(ps))
+
+# Histogram of sample read counts
+p1 <- ggplot(sample_sum_df1, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "steelblue", binwidth = 2500) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  ylab("Frequency") +
+  theme(axis.title.y = element_blank())
+p1
+
+
+
+```
+
+**Filter**
+
+* Filter based on ASV rank,  I keep only ASV with total abundance >= 50. 
+
+##prevalende: in how many samples is present the particular ASV
+
+```{r}
+#Filter
+# Define prevalence of each taxa
+# Prevalence: nr of samples each taxa occur in
+ps0 <- ps
+prev0 = apply(X = otu_table(ps0),
+                MARGIN = ifelse(taxa_are_rows(ps0), yes = 1, no = 2),
+                FUN = function(x){sum(x > 0)})
+prevdf = data.frame(Prevalence = prev0,
+                      TotalAbundance = taxa_sums(ps0),
+                      tax_table(ps0))
+
+prevdf[1:5,1:5]   #table before filtering
+```
+
+```{r}
+summary_prevalence <- plyr::ddply(prevdf, "ASV2", function(df1){
+  data.frame(sum_prevalence=sum(df1$Prevalence),
+             total_abundance=sum(df1$TotalAbundance,na.rm = T),
+             stringsAsFactors = F)
+  })
+
+```
+
+```{r}
+
+#remove ASV with total sum less than 50
+keepASV <- summary_prevalence$ASV[summary_prevalence$total_abundance >= 50]
+
+
+#remove asv which are present in less than 5% of samples, 0.05*349=17
+#keepASV <- summary_prevalence$ASV[summary_prevalence$sum_prevalence >= 0.04*nrow(sample_data(ps.ad.st))]
+```
+
+```{r}
+ 
+# Filter entries with unidentified ASV.
+ps1 = subset_taxa(ps0, ASV2 %in% keepASV)
+summary_prevalence <- summary_prevalence[summary_prevalence$ASV2 %in% keepASV, ]
+summary_prevalence[1:6,]
+summary(summary_prevalence$total_abundance)
+summary(summary_prevalence$sum_prevalence)
+ps1
+# Subset to the remaining taxa
+prevdf1 = subset(prevdf, ASV2 %in% get_taxa_unique(ps1, "ASV2"))
+```
+
+**Agglomerate**
+
+* Agglomerate closely related taxa, genus level.
+```{r}
+ps1_glom <- tax_glom(ps1, taxrank = "Genus", NArm = TRUE)
+ps1_glom
+
+
+ps1_rel = phyloseq::transform_sample_counts(ps1_glom, function(x){x / sum(x)})
+
+```
+
+**Total abundance after agglomeration for Healthy ~ AD patients**
+
+```{r}
+phyloseq::plot_bar(ps1_rel, fill = "Phylum") +
+  geom_bar(aes(color = Phylum, fill = Phylum), stat = "identity", position = "stack") +
+  labs(x = "Samples", y = "Relative Abundance\n") +
+  theme(panel.background = element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+
+
+# Save output
+
+pyloseq object after filtering
+```{r}
+"3.ps.filter.pd.abundance.rds" %>%
+  saveRDS(ps1, .)
+
+```
+
+```{r}
+library("rio")
+
+export(prevdf, "prevalence.abundance.pd.xlsx")
+export(prevdf1, "prevalence.abundance.pd.filtered.abund.xlsx")
+
+
+
+```
+
+
+# Session info
+
+```{r}
+#sessionInfo()
+```

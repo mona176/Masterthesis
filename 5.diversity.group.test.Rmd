@@ -1,0 +1,191 @@
+---
+title: "Merge files into phyloseq"
+author: "Mona Hildebrandt"
+date: "`r Sys.Date()`"
+output:
+   #BiocStyle::html_document:
+   html_document:
+     
+     code_folding: hide
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F}
+# Set knit global options
+library("knitr")
+options(digits = 2, width = 80)
+golden_ratio <- (1 + sqrt(5)) / 2
+opts_chunk$set(echo = TRUE,
+               tidy = FALSE,
+               include = TRUE,
+               fig.path = params$FIGPATH,
+               dev=c("png",'pdf'),
+               fig.height = 5,
+               fig.width = 4 * golden_ratio,
+               comment = '  ',
+               dpi = 300,
+               cache = FALSE)
+
+
+# Pretty outputs
+library("rmarkdown")
+#library("BiocStyle")
+library("ggthemes") # add ggplot2 themes
+library("ggplot2")
+library("ggpubr")
+
+# Set seed for reproducibility
+set.seed(100)
+
+# Set plotting theme
+theme_set(theme_few(base_size = 14))
+
+# Set output directory
+d.out <- params$d.out
+rm(params)
+```
+
+
+## Load libraries for the session
+```{r libraries, message=FALSE}
+library("magrittr")
+library("ggplot2")
+library("tidyverse")
+library("readxl")
+#library("dada2")
+library("phyloseq")
+library("gridExtra")
+library("vegan")
+library("plyr")
+library("scales")
+library("reshape2")
+#library("DESeq2")
+library("dplyr") #for data manipulation
+#library("msa") #multiple sequence alignment
+library("ape") #to create phylogenetic tree
+library("randomForest") 
+library("caret") 
+library("broom")
+library("mlbench")
+library("plotROC")
+
+```
+
+
+# Alpha diversity {.tabset}
+
+## No Filter taxa
+
+### Import data
+
+
+Filtered phyloseq, stool samples
+I have filtered here only ASV with prevalence > 5% of all samples
+```{r}
+# Phyloseq object AD filtered samples
+d.ps.filter.ad.st <- "~/Documents/dietproject"
+ps.filter.ad.st <- "/3.ps.filter.pd.abundance.rds" %>%
+  paste0(d.ps.filter.ad.st,"/", .) %>% 
+  readRDS() 
+ps.filter.ad.st
+
+
+```
+
+subset only stool samples:
+
+```{r}
+ps.st <- ps.filter.ad.st
+ps.st
+```
+
+
+
+
+### Rarefaction
+
+I rarefy samples before alpha diversity
+I will subsample to the min number of reads
+
+```{r}
+ps.rar <- rarefy_even_depth(ps.st, sample.size = min(sample_sums(ps.st)))
+ps.rar
+
+```
+
+
+### Calculate alpha diversity and plot 
+
+
+Calculate alpha diversity measures
+```{r}
+#Diversity values in one table only
+rich <- estimate_richness(ps.rar, measures = c("Shannon", "Chao1"))
+head(rich)
+
+```
+
+Prepare table: merge diversity measure results with metadata
+```{r}
+df <- cbind(sample_data(ps.rar), rich)
+```
+
+Lets have a look on the metadata table
+
+```{r}
+meta <- sample_data(ps.rar)
+```
+
+
+
+Separate groups of comparision in two tables
+```{r}
+df1 <- df[which(df$Geschlecht %in% c("m", "w")), ]
+```
+
+### Plot
+
+Edit: transform  tables to fit ggplot
+
+```{r}
+df55 <- df[c("Chao1", "Geschlecht")]
+df55$Value <- df55$Chao1
+df55$Measure <- "Chao1"
+df55$Chao1 <- NULL
+
+
+df66 <- df[c("Shannon", "Geschlecht")]
+df66$Value <- df66$Shannon
+df66$Measure <- "Shannon"
+df66$Shannon <- NULL
+```
+
+```{r}
+df77 <- rbind(df55, df66)
+```
+
+```{r, out.width="60%"}
+par(mfrow=c(1,1))
+theme_set(theme_bw())
+p <- ggplot(df77, aes(x=Geschlecht, y=Value, color=Geschlecht)) + 
+  geom_boxplot(alpha = 2, na.rm = TRUE, outlier.size = 0)+ 
+                        theme(text = element_text(size = 12)) +
+                        scale_colour_brewer(palette = "Dark2") +
+                        labs(y="Alpha diversity measure", x = "Status")+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.6)))
+
+hd <- p  + facet_wrap(~Measure, scale="free")
+hd 
+#ggsave("alpha.status.png")
+```
+
+
+
+# Session info

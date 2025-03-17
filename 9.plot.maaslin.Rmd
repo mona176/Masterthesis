@@ -1,0 +1,216 @@
+---
+title: "Bins and contig abundance tables"
+author: "Alba Troci"
+date: "`r Sys.Date()`"  
+output:
+   BiocStyle::html_document:
+      toc: true
+      df_print: paged
+      self_contained: true
+      code_download: true 
+      highlight: tango
+editor_options:
+  chunk_output_type: console
+params:
+  FIGPATH: "figures/"
+  d.out: "./"
+---
+# Preparations
+## Set global options
+
+```{r style, results="asis", cache=FALSE, message = F, echo=FALSE}
+# Set knit global options
+#library("knitr")
+# options(digits = 2, width = 80)
+# golden_ratio <- (1 + sqrt(5)) / 2
+# opts_chunk$set(echo = TRUE,
+#                tidy = FALSE,
+#                include = TRUE,
+#                fig.path = params$FIGPATH,
+#                dev=c("png",'pdf'),
+#                fig.height = 5,
+#                fig.width = 4 * golden_ratio,
+#                comment = '  ',
+#                dpi = 300,
+#                cache = FALSE)
+
+
+# Pretty outputs
+library("pasilla")
+library("tidyverse")
+library("DESeq2")
+library("pheatmap")
+library("RColorBrewer")
+library("apeglm")
+
+library("DEGreport")
+#Note: In some versions of Mac DEGreport will not be loaded successfully,
+#Try install Xquarz, restart Mac and R studio, and try to load again
+# https://www.xquartz.org/
+```
+
+only significant results
+
+```{r}
+abundance <- read.csv(paste("~/Documents/dietproject/significant_results_Calcium.Carbohydrate.tsv"),sep = '\t', header=TRUE)
+
+tab1 <- abundance
+
+
+```
+
+
+
+all results
+
+
+```{r}
+df <- read.csv(paste("~/Documents/dietproject/all_results.calcium.carbs.tsv"),sep = '\t', header=TRUE)
+
+df1 <- data.frame(df)
+
+```
+
+## komische nummer entfernen 
+```{r}
+df1 <- df1 %>%
+  filter(coef != "107.571.796.679.855")
+df1 <- df1 %>%
+  filter(coef != "106.838.215.948.867")
+
+```
+
+```{r}
+df2 <- df1[(df1$feature %in% abundance$feature), ]
+```
+
+```{r}
+df3 <- df2[!(df2$metadata %in% c("BMI", "Alter", "Geschlecht")), ]
+```
+
+
+prepare to plot
+
+
+
+```{r}
+tab1 <- df3[, c("feature", "Nutrient", "coef")]
+```
+
+```{r}
+tab2 <- tab1[!(tab1$feature %in% "NA."),  ]
+```
+
+
+```{r}
+genome10 <- tab2 %>%
+  pivot_wider(names_from = Nutrient, values_from = coef)
+
+genome1 <- na.omit(genome10)
+#genome110 <- genome1[!(genome1$feature %in% "NA."), ]
+
+```
+
+
+```{r}
+genome11 <- genome1 %>% column_to_rownames(var="feature")
+#genome111 <- mutate_all(genome11, function(x) as.numeric(as.character(x)))
+
+
+```
+
+```{r}
+genome111 <- mutate_all(genome11, function(x) as.numeric(as.character(x)))
+```
+
+
+```{r}
+genome22 <- as.matrix(genome111)
+
+```
+
+```{r}
+h <- heatmap(genome22)
+```
+
+
+```{r}
+heatmap(genome22)
+```
+
+prepare another annotation for significance of asv
+
+
+```{r}
+g <- df5[, c("Species", "Cohort", "qval")]
+#g22 <- g[!duplicated(g$Species), ]
+
+g22 <- g
+```
+
+```{r}
+g2 <- g22[(g22$Species %in% genome1$Species), ]
+
+```
+
+```{r}
+p.genome1 <- g2 %>%
+  pivot_wider(names_from = Cohort, values_from = qval)
+
+```
+
+
+```{r}
+p.genome11 <- p.genome1 %>% column_to_rownames(var="Species")
+p.genome22 <- as.matrix(p.genome11)
+
+```
+
+```{r}
+heatmap(p.genome22)
+```
+
+good one
+```{r}
+library("circlize")
+library("ComplexHeatmap")
+library("dendsort")
+row_dend = dendsort(hclust(dist(genome22)))
+#col_dend = dendsort(hclust(dist(t(genome22))))
+
+#row_ha = rowAnnotation(Prevalence=prev2$Prevalence, bar2 = anno_barplot(prev2$Prevalence), annotation_name_rot = 0, show_annotation_name = FALSE)
+f2 = colorRamp2(seq(min(genome22), max(genome22), length = 3), c("blue", "#EEEEEE", "red"), space = "RGB")
+h3 <- Heatmap(genome22, 
+        name = "Coeficient", #title of legend,
+        #right_annotation = row_ha,
+        #row_km = 4,
+        #row_split = 4, column_split = 2,
+        col = f2,
+        cluster_rows = row_dend, 
+        cluster_columns = FALSE,
+        row_order = sort(rownames(genome22)),
+        column_title = "HC vs MS-nOC", row_title = "Species",
+        row_names_gp = gpar(fontsize = 10), # Text size for row names
+        column_names_gp = gpar(fontsize = 10),
+        show_column_dend = FALSE,
+        column_names_rot = -45,
+        width = unit(3, "cm"), height = unit(10, "cm"),
+        row_names_max_width = max_text_width(rownames(genome22), gp = gpar(fontsize = 10)),
+        cell_fun = function(j, i, x, y, w, h, fill) {
+	               if(p.genome22[i, j] < 0.3) {
+		               grid.text("*", x, y)
+	                              }
+                              }
+        )
+
+h3
+
+#ggsave("heatmap.f1.png")
+```
+
+
+
+
+
+
+##session info
